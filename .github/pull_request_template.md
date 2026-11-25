@@ -1,7 +1,8 @@
 ## Stage
 <!-- Select one -->
 - [ ] Stage 1 — Intent
-- [ ] Stage 2 — Specification _(future)_
+- [ ] Stage 2 — Specification
+- [ ] Stage 3 — Plan
 
 ## Artifact
 <!-- Path to the document being added or changed, e.g. intent/crm-to-practice-management-sync.md -->

@@ -26,6 +26,8 @@ the-ai-native-sdlc-playbook/
 │   └── crm-to-practice-management-sync.md — example (filled in)
 ├── spec/                                  — Stage 2: generated spec documents live here
 │   └── crm-to-practice-management-sync.md — example (filled in)
+├── plan/                                  — Stage 3: generated plan documents live here
+│   └── crm-to-practice-management-sync.md — example (filled in)
 └── .claude/
     └── skills/
         ├── create-intent/
@@ -34,6 +36,9 @@ the-ai-native-sdlc-playbook/
         ├── create-spec/
         │   ├── SKILL.md                   — /create-spec skill
         │   └── spec-template.md           — IRD-shaped template the skill reads at runtime
+        ├── create-plan/
+        │   ├── SKILL.md                   — /create-plan skill
+        │   └── plan-template.md           — phased plan template the skill reads at runtime
         └── policies/
             ├── integration-security.md    — auth, PII, encryption constraints
             ├── integration-standards.md   — error categories, retry, idempotency
@@ -172,6 +177,103 @@ After saving the `.md` file, `/create-spec` creates a Google Doc with the same c
 | `spec/crm-to-practice-management-sync.md` | Filled example — the same professional services scenario as the intent example, taken through to full spec |
 | `.claude/skills/create-spec/SKILL.md` | The `/create-spec` skill source |
 | `.claude/skills/policies/` | The three policy constraint files |
+
+---
+
+## Stage 3: Plan
+
+**Status: complete**
+
+The third stage takes an approved `spec.md` and produces a phased implementation plan — a `plan.md` committed to the repository that engineers can build against. This is the bridge between "what are we building" (spec) and "how are we building it" (code).
+
+In a traditional workflow, implementation planning is informal: an engineer reads the spec, makes decisions in their head or in a Jira ticket, and starts coding. What was decided and why is rarely captured. The AI-native version makes the plan explicit and version-controlled — giving the team a shared understanding before the first line of code is written.
+
+### The artifact
+
+A plan document captures:
+- A plain-language summary of what will be built
+- Status table: all phases with completion tracking
+- Files that change, grouped by phase — a pre-flight check for each phase
+- Phase 0: environment setup and all prerequisites
+- Phases 1–N: implementation phases derived from the spec's proposed flow, each with scoped tasks, verification steps, and open item cross-references
+- Testing & UAT: one subsection per Definition of Done scenario with expected vs. actual tracking
+- Deployment — Sandbox: step-by-step deployment checklist for non-production
+- Deployment — Production: go/no-go checklist, cutover steps, rollback plan, and 48-hour monitoring window
+- Risks, architecture decisions, open items (all spec open items carried forward)
+- Confirmed references: live API endpoints, field names, and object IDs verified before build
+
+Files live in `plan/` with the same kebab-case name as the source spec. The intent, spec, and plan are always chained — each is the input to the next stage, and all three together form the complete record of why something was built and how.
+
+**Lifecycle states:**
+
+| Status | Meaning |
+|--------|---------|
+| `draft` | Generated; not yet reviewed by engineering lead |
+| `in-progress` | Implementation underway; plan updated to reflect actual progress |
+| `complete` | All phases done; deployed to production |
+
+### How to create a plan document
+
+Run the `/create-plan` skill with the path to the approved spec file. This skill runs in **plan mode**: it reads the spec and codebase, drafts the plan, asks the engineer three interrogation questions one at a time, then calls `ExitPlanMode` for approval before writing any files.
+
+```
+/create-plan spec/crm-to-practice-management-sync.md
+```
+
+The three interview questions:
+1. "What could this change break that isn't already covered in the Risks section?"
+2. "Which phase or step feels most uncertain to you — where would you want to pause and verify before continuing?"
+3. "Is there anything in the approach I've proposed that you'd do differently?"
+
+After approval, the file is saved to `plan/<name>.md`.
+
+### Reference files
+
+| File | Purpose |
+|------|---------|
+| `.claude/skills/create-plan/plan-template.md` | Blank template — all sections with inline guidance |
+| `plan/crm-to-practice-management-sync.md` | Filled example — the same professional services scenario carried through to a full implementation plan |
+| `.claude/skills/create-plan/SKILL.md` | The `/create-plan` skill source |
+
+---
+
+## Source of Truth Configurations
+
+When a plan is committed to this repository, the `source-of-truth:` field in its metadata records which system is the authoritative record for that plan. Three configurations are supported:
+
+### Option 1: `repo` (default)
+
+The `.md` file in this repository is the authoritative record. All decisions, task status, and updates are made directly in `plan.md` and committed to Git. If an external ticket exists, link it to the plan's Git commit SHA — do not duplicate content there.
+
+```
+source-of-truth: repo
+```
+
+Best for: teams that live in their code editor and want the plan co-located with the code.
+
+### Option 2: `jira:<ticket-id>`
+
+The Jira ticket is authoritative. The `plan.md` in this repository is a working copy — synced from Jira at the start of each Claude Code session (if the Jira MCP connector is available). Updates to task status and notes are made in Jira; the `plan.md` is regenerated or updated from Jira rather than edited directly.
+
+```
+source-of-truth: jira:ENG-1234
+```
+
+Best for: teams where project tracking happens in Jira and engineers expect to find status there, not in Markdown files.
+
+### Option 3: `github-issue:<number>`
+
+The GitHub issue is authoritative. The `plan.md` is a working copy. Cross-reference the issue in the plan and in pull request descriptions. Status updates happen on the issue; the plan is updated when implementation decisions change.
+
+```
+source-of-truth: github-issue:42
+```
+
+Best for: open-source or GitHub-native teams where issues are the primary coordination mechanism.
+
+---
+
+**Note:** No MCP connectors are built in this repository. The three configurations above are documented as options. Setting up a live connector to Jira or Linear is deferred until the team's specific ticket system is known. When a connector is available, Claude Code reads from the authoritative system at session start and can sync changes back.
 
 ---
 

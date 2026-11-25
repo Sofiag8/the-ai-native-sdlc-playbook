@@ -15,6 +15,7 @@ the-ai-native-sdlc-playbook/
 ├── CLAUDE.md                              — this file
 ├── intent/                                — Stage 1: generated intent documents live here
 ├── spec/                                  — Stage 2: generated spec documents live here
+├── plan/                                  — Stage 3: generated plan documents live here
 └── .claude/
     └── skills/
         ├── create-intent/
@@ -23,6 +24,9 @@ the-ai-native-sdlc-playbook/
         ├── create-spec/
         │   ├── SKILL.md                   — /create-spec skill
         │   └── spec-template.md           — IRD-shaped template the skill reads at runtime
+        ├── create-plan/
+        │   ├── SKILL.md                   — /create-plan skill
+        │   └── plan-template.md           — phased plan template the skill reads at runtime
         └── policies/
             ├── integration-security.md    — auth, PII, encryption constraints
             ├── integration-standards.md   — error categories, retry, idempotency
@@ -142,6 +146,42 @@ The spec is constrained by three policy files in `.claude/skills/policies/`. The
 
 ---
 
+## Module 3: Plan
+
+The third stage takes an approved `spec.md` and produces a phased implementation plan (`plan.md`) that engineers can build against.
+
+### What a plan document is
+
+A plan captures:
+- Phase-by-phase implementation tasks derived from the spec
+- Explicit Testing & UAT phase with per-scenario subsections
+- Sandbox and production deployment phases with checklists and rollback plan
+- Files that change, grouped by phase
+- Risks, architecture decisions, and open items (all spec open items carried forward)
+- Confirmed references: live API endpoints and field names verified before build
+
+Plan documents live in the `plan/` folder with the same kebab-case name as the source spec and intent.
+
+### Lifecycle states
+
+| Status | Meaning |
+|--------|---------|
+| `draft` | Generated; not yet reviewed by engineering lead |
+| `in-progress` | Implementation underway; plan updated to reflect actual progress |
+| `complete` | All phases done; deployed to production |
+
+### Creating a plan document
+
+An engineer or technical lead invokes `/create-plan` with the spec file path. The skill runs in plan mode: it reads the spec and codebase, drafts the plan, asks three interview questions one at a time, then calls ExitPlanMode for approval before writing the file.
+
+```
+/create-plan spec/crm-to-practice-management-sync.md
+```
+
+Set `source-of-truth:` in the plan.md metadata to `repo`, `jira:<ticket-id>`, or `github-issue:<number>` to record which system is authoritative for this plan. Default is `repo`.
+
+---
+
 ## Git and GitHub workflow
 
 Branch naming follows the stage of the artifact being created or revised:
@@ -150,6 +190,7 @@ Branch naming follows the stage of the artifact being created or revised:
 |----------------|-------------|
 | `intent/<kebab-name>` | Adding or revising a Stage 1 intent document |
 | `spec/<kebab-name>` | Adding or revising a Stage 2 spec document |
+| `plan/<kebab-name>` | Adding or revising a Stage 3 plan document |
 
 **To add a new intent document:**
 1. Create a branch: `git checkout -b intent/<kebab-name>`
@@ -164,5 +205,12 @@ Branch naming follows the stage of the artifact being created or revised:
 3. Commit both the spec and any Google Doc URL update, then push the branch
 4. Open a PR — resolve Areas of Concern before merging
 5. Merge when status is `approved`
+
+**To add a new plan document:**
+1. Create a branch: `git checkout -b plan/<kebab-name>`
+2. Run `/create-plan spec/<kebab-name>.md` and let the skill interview and generate the file
+3. Commit the plan and push the branch
+4. Open a PR — engineering lead reviews phases and open items before merging
+5. Merge when status is `draft` and the team is ready to begin implementation
 
 The `main` branch is protected — no direct pushes. All changes go through a PR.
