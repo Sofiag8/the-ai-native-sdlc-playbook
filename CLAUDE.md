@@ -13,13 +13,20 @@ This repository is a neutral, anonymized template demonstrating the AI-native so
 ```
 the-ai-native-sdlc-playbook/
 ├── CLAUDE.md                              — this file
+├── Makefile                               — verify target: runs scripts/verify.sh
 ├── intent/                                — Stage 1: generated intent documents live here
 ├── spec/                                  — Stage 2: generated spec documents live here
 ├── plan/                                  — Stage 3: generated plan documents live here
 ├── scripts/
-│   └── check-git-branch.sh               — PreToolUse hook: enforces branch conventions
+│   ├── check-git-branch.sh               — PreToolUse hook: enforces branch conventions
+│   ├── protect-templates.sh              — PreToolUse hook: guards policy/template files
+│   └── verify.sh                         — document integrity checks (run via make verify)
 └── .claude/
-    ├── settings.json                      — registers the PreToolUse hook (team-wide)
+    ├── settings.json                      — registers all PreToolUse hooks (team-wide)
+    ├── agents/
+    │   ├── verifier.md                    — subagent: runs make verify, reports only
+    │   ├── researcher.md                  — subagent: explores codebase/web, read-only
+    │   └── simplifier.md                 — subagent: reviews artifacts, proposes cuts
     └── skills/
         ├── create-intent/
         │   ├── SKILL.md                   — /create-intent skill
@@ -51,51 +58,25 @@ An `intent.md` captures, in the originator's own words:
 - What constraints apply
 - What open questions must be resolved before design begins
 
-Intent documents live in the `intent/` folder. The file for a project called "Contact Sync to CRM" would be `intent/contact-sync-to-crm.md`. File names are kebab-case.
+Intent documents live in the `intent/` folder. File names are kebab-case.
 
 ### Lifecycle states
-
-The metadata block at the top of each intent file (an HTML comment, invisible in rendered Markdown) tracks status:
 
 | Status | Meaning |
 |--------|---------|
 | `draft` | Being written; not yet reviewed |
 | `under-review` | Shared for stakeholder input; open questions being resolved |
-| `committed` | All open questions resolved; approved by the product owner; ready to advance to Stage 2 (Specification) |
+| `committed` | All open questions resolved; approved by the product owner; ready to advance to Stage 2 |
 
-An intent document cannot be marked `committed` while it has open rows in its Open Questions table.
-
-The merge of an intent file into the main branch is the recorded approval event. The Git history provides the author, timestamp, and full revision record.
-
-### Process metrics (Module 1)
-
-- **Leading indicator**: time from first conversation to a committed `intent.md`, read from Git history
-- **Lagging indicator**: share of committed intent files accepted into Stage 2 rather than closed
+An intent document cannot be marked `committed` while it has open rows in its Open Questions table. The merge into main is the recorded approval event.
 
 ### Creating an intent document
 
-Any team member — technical or not — can create an intent document by invoking the `/create-intent` skill. No Git knowledge is required to run the conversation; a technical team member commits the resulting file.
+Any team member can create an intent document by invoking the `/create-intent` skill.
 
-**Basic invocation:**
 ```
 /create-intent
 ```
-Claude will ask questions one at a time, like an analyst would, until it has enough information to draft the document.
-
-**With seed context** (a Slack message, a brief description, etc.):
-```
-/create-intent We need contacts created in the HR system to automatically
-appear in our sales CRM within 24 hours of onboarding.
-```
-Claude uses the pasted context as a starting point and asks only for what is missing.
-
-The skill reads `intent/intent-template.md` to generate the draft, iterates with the originator until the content is confirmed accurate, then saves the file to `intent/<kebab-case-name>.md`.
-
-### Template
-
-The blank template lives at `.claude/skills/create-intent/intent-template.md`. It documents every section and its purpose and can be filled in manually without the skill.
-
----
 
 ---
 
@@ -103,21 +84,11 @@ The blank template lives at `.claude/skills/create-intent/intent-template.md`. I
 
 The second stage takes an approved `intent.md` and produces a full Integration Requirements Document (spec.md) that engineering can plan against.
 
-### What a spec document is
+A product owner or technical lead invokes `/create-spec` with the intent file path. The skill reads the intent, applies the three policy files in `.claude/skills/policies/` as constraints, and generates the spec in one pass.
 
-A spec captures:
-- Overview and definitions
-- Scope boundary (confirmed and extended from intent)
-- Infrastructure ownership and cloud components
-- Proposed data flow (step-by-step, per direction)
-- Field mapping and data transformation
-- Error handling and exception playbook (Categories A, B, C)
-- Responsibilities (vendor vs. client)
-- Assumptions, definition of done, costs
-- Open items (carried from intent, plus spec-surfaced gaps)
-- Areas of Concern (policy violations or design risks flagged for product owner review)
-
-Spec documents live in the `spec/` folder with the same kebab-case name as the source intent.
+```
+/create-spec intent/crm-to-practice-management-sync.md
+```
 
 ### Lifecycle states
 
@@ -127,43 +98,17 @@ Spec documents live in the `spec/` folder with the same kebab-case name as the s
 | `under-review` | Product owner reviewing Areas of Concern with policy owners |
 | `approved` | All concerns resolved; ready to advance to Stage 3 (Build) |
 
-### Creating a spec document
-
-A product owner or technical lead invokes `/create-spec` with the intent file path. The skill reads the intent, applies the three policy skills, and generates the spec in one pass.
-
-```
-/create-spec intent/crm-to-practice-management-sync.md
-```
-
-The skill also creates a Google Doc version for stakeholder sharing (requires Google Workspace connection).
-
-### Policy skills
-
-The spec is constrained by three policy files in `.claude/skills/policies/`. These are read automatically by `/create-spec` — they do not need to be invoked separately.
-
-| Policy file | Enforces |
-|-------------|---------|
-| `integration-security.md` | Auth methods, PII handling, encryption, secrets management |
-| `integration-standards.md` | Error categories (A/B/C), retry, idempotency, deduplication, logging |
-| `infrastructure-ownership.md` | Client owns infrastructure, vendor owns code, warranty terms, cost estimation |
-
 ---
 
 ## Module 3: Plan
 
 The third stage takes an approved `spec.md` and produces a phased implementation plan (`plan.md`) that engineers can build against.
 
-### What a plan document is
+An engineer or technical lead invokes `/create-plan` with the spec file path. The skill runs in plan mode: it reads the spec and codebase, drafts the plan, asks three interview questions one at a time, then calls ExitPlanMode for approval before writing the file.
 
-A plan captures:
-- Phase-by-phase implementation tasks derived from the spec
-- Explicit Testing & UAT phase with per-scenario subsections
-- Sandbox and production deployment phases with checklists and rollback plan
-- Files that change, grouped by phase
-- Risks, architecture decisions, and open items (all spec open items carried forward)
-- Confirmed references: live API endpoints and field names verified before build
-
-Plan documents live in the `plan/` folder with the same kebab-case name as the source spec and intent.
+```
+/create-plan spec/crm-to-practice-management-sync.md
+```
 
 ### Lifecycle states
 
@@ -173,38 +118,42 @@ Plan documents live in the `plan/` folder with the same kebab-case name as the s
 | `in-progress` | Implementation underway; plan updated to reflect actual progress |
 | `complete` | All phases done; deployed to production |
 
-### Creating a plan document
-
-An engineer or technical lead invokes `/create-plan` with the spec file path. The skill runs in plan mode: it reads the spec and codebase, drafts the plan, asks three interview questions one at a time, then calls ExitPlanMode for approval before writing the file.
-
-```
-/create-plan spec/crm-to-practice-management-sync.md
-```
-
-Set `source-of-truth:` in the plan.md metadata to `repo`, `jira:<ticket-id>`, or `github-issue:<number>` to record which system is authoritative for this plan. Default is `repo`.
-
 ---
 
 ## Module 4: Hooks as Build-Time Guardrails
 
 Skills and CLAUDE.md rules are advisory — Claude can reason past them. Hooks are deterministic: they fire on every matching tool call and block the action before it runs.
 
-### The hook
-
 `scripts/check-git-branch.sh` is registered as a `PreToolUse` hook on the `Bash` tool in `.claude/settings.json`. It fires before every Bash call.
 
 **What it blocks (exit 2 — blocked, message shown to Claude):**
 1. `git add`, `git commit`, or `git push` while on branch `main`
-2. Those same commands while on a branch that does not match `^(intent|spec|plan)/[a-z0-9][a-z0-9-]*$`
+2. Those same commands while on a branch that does not match `^(intent|spec|plan|policy|template)/[a-z0-9][a-z0-9-]*$`
 3. `git commit -m "..."` where the subject line exceeds 72 characters
 
-**What it allows (exit 0):**
-- Any Bash command that is not `git add`, `git commit`, or `git push`
-- Those git commands on a correctly named branch with an acceptable commit message
+`.claude/settings.json` is committed to the repository. Personal overrides go in `.claude/settings.local.json` (gitignored).
 
-### Registration
+---
 
-`.claude/settings.json` is committed to the repository. Every team member who opens a Claude Code session in this repo gets the same hook behavior. Personal overrides go in `.claude/settings.local.json` (gitignored).
+## Module 5: Parallel Sessions and Subagents
+
+Subagent definitions live in `.claude/agents/` with `name:`, `description:`, and `tools:` frontmatter. Three subagents ship with this repo: `verifier` (runs make verify, reports only), `researcher` (read-only codebase and web exploration), and `simplifier` (reviews completed artifacts, proposes cuts). Check definitions into Git so the whole team shares them. See README.md for full detail.
+
+---
+
+## Module 6: Give Claude a Feedback Loop
+
+Run `make verify` before reporting a task done. It checks spec/intent and plan/spec pairing, agent frontmatter completeness, and CLAUDE.md line count. Paste the output.
+
+Policy files, SKILL.md files, `*-template.md` files, and `scripts/verify.sh` are protected by `protect-templates.sh` (PreToolUse on Edit and Write). They can only be modified on `policy/<name>` or `template/<name>` branches. See README.md for detail.
+
+---
+
+## Commands
+
+| Command | What it does |
+|---------|-------------|
+| `make verify` | Runs all four document integrity checks |
 
 ---
 
@@ -217,6 +166,8 @@ Branch naming follows the stage of the artifact being created or revised:
 | `intent/<kebab-name>` | Adding or revising a Stage 1 intent document |
 | `spec/<kebab-name>` | Adding or revising a Stage 2 spec document |
 | `plan/<kebab-name>` | Adding or revising a Stage 3 plan document |
+| `policy/<kebab-name>` | Modifying any file in `.claude/skills/policies/` |
+| `template/<kebab-name>` | Modifying any SKILL.md, `*-template.md`, or `scripts/verify.sh` |
 
 **To add a new intent document:**
 1. Create a branch: `git checkout -b intent/<kebab-name>`

@@ -3,12 +3,15 @@
     "PreToolUse": [
       {
         "matcher": "Bash",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "scripts/check-git-branch.sh"
-          }
-        ]
+        "hooks": [{ "type": "command", "command": "scripts/check-git-branch.sh" }]
+      },
+      {
+        "matcher": "Edit",
+        "hooks": [{ "type": "command", "command": "scripts/protect-templates.sh" }]
+      },
+      {
+        "matcher": "Write",
+        "hooks": [{ "type": "command", "command": "scripts/protect-templates.sh" }]
       }
     ]
   }
