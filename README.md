@@ -28,7 +28,10 @@ the-ai-native-sdlc-playbook/
 │   └── crm-to-practice-management-sync.md — example (filled in)
 ├── plan/                                  — Stage 3: generated plan documents live here
 │   └── crm-to-practice-management-sync.md — example (filled in)
+├── scripts/
+│   └── check-git-branch.sh               — PreToolUse hook: enforces branch conventions
 └── .claude/
+    ├── settings.json                      — registers the PreToolUse hook (team-wide)
     └── skills/
         ├── create-intent/
         │   ├── SKILL.md                   — /create-intent skill
@@ -234,6 +237,68 @@ After approval, the file is saved to `plan/<name>.md`.
 | `.claude/skills/create-plan/plan-template.md` | Blank template — all sections with inline guidance |
 | `plan/crm-to-practice-management-sync.md` | Filled example — the same professional services scenario carried through to a full implementation plan |
 | `.claude/skills/create-plan/SKILL.md` | The `/create-plan` skill source |
+
+---
+
+## Module 4: Hooks as Build-Time Guardrails
+
+**Status: complete**
+
+The first three stages established *advisory* controls: CLAUDE.md rules tell Claude what conventions to follow, and skills enforce a particular workflow. Advisory controls work well until they don't — if Claude reasons past a rule or a skill is not invoked, the guardrail fails silently.
+
+Module 4 adds the *deterministic* layer. Hooks fire on every matching tool call and block the action before it executes. Claude cannot reason past a hook; it sees the error message and must fix the problem before retrying.
+
+### The difference: advisory vs. deterministic
+
+| Control type | Example | Can Claude bypass it? |
+|---|---|---|
+| CLAUDE.md rule | "Do not push directly to main" | Yes — it is advice |
+| Skill | `/create-intent` guides the workflow | Yes — only runs when invoked |
+| Hook | `PreToolUse` on `Bash` | No — fires on every matching call |
+
+A skill or CLAUDE.md rule is the right tool when the guidance is conditional or contextual. A hook is the right tool when the rule must hold without exception.
+
+### The hook: `scripts/check-git-branch.sh`
+
+The hook script runs before every `Bash` tool call. It inspects the `command` field of the JSON input and applies three checks for `git add`, `git commit`, and `git push`.
+
+**Check 1 — Block on main branch**
+
+If the current branch is `main`, the command is blocked with a message naming the three valid branch patterns. This prevents accidental direct commits to the protected branch even when Claude generates the git commands itself.
+
+**Check 2 — Enforce branch naming convention**
+
+If the branch name does not match `^(intent|spec|plan)/[a-z0-9][a-z0-9-]*$`, the command is blocked. This ensures every commit is traceable to a stage and a named artifact — not to an arbitrary branch like `feature/something` or `fix`.
+
+**Check 3 — Commit subject line length (soft gate)**
+
+If the command is `git commit -m "..."` and the first line of the message exceeds 72 characters, the command is blocked with a request to shorten it. This is a soft gate: Claude can retry immediately with a shorter message.
+
+### Exit code semantics
+
+| Exit code | Meaning |
+|---|---|
+| `0` | Allow — command proceeds |
+| `2` | Block — the hook's stderr output is shown to Claude as an error message |
+
+Any non-git Bash command (e.g. `ls`, `python3`, `npm install`) passes check 1 immediately and exits 0. The hook adds no overhead to unrelated commands.
+
+### Governance
+
+`.claude/settings.json` is committed to the repository. Every team member who opens a Claude Code session in this repo picks up the same hook configuration automatically.
+
+For personal overrides — if a team member needs to bypass the hook for a specific session — they add an entry to `.claude/settings.local.json`, which is gitignored and never shared.
+
+### Limitation
+
+This hook fires on `Bash` tool calls. It does not fire when a shell command rewrites a file through the `Edit` or `Write` tools. For full coverage, the same branch-convention check should also run as a CI step (e.g. a GitHub Actions workflow that inspects the target branch on every pull request).
+
+### Reference files
+
+| File | Purpose |
+|---|---|
+| `scripts/check-git-branch.sh` | The hook script — branch and commit message checks |
+| `.claude/settings.json` | Registers the `PreToolUse` hook on the `Bash` tool |
 
 ---
 
