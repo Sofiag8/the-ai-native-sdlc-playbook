@@ -22,6 +22,7 @@ Each stage of the SDLC produces a version-controlled Markdown artifact. These ar
 the-ai-native-sdlc-playbook/
 ├── README.md                              — this file
 ├── CLAUDE.md                              — guidance for Claude Code sessions
+├── Makefile                               — verify target: runs scripts/verify.sh
 ├── intent/                                — Stage 1: generated intent documents live here
 │   └── crm-to-practice-management-sync.md — example (filled in)
 ├── spec/                                  — Stage 2: generated spec documents live here
@@ -29,9 +30,15 @@ the-ai-native-sdlc-playbook/
 ├── plan/                                  — Stage 3: generated plan documents live here
 │   └── crm-to-practice-management-sync.md — example (filled in)
 ├── scripts/
-│   └── check-git-branch.sh               — PreToolUse hook: enforces branch conventions
+│   ├── check-git-branch.sh               — PreToolUse hook: enforces branch conventions
+│   ├── protect-templates.sh              — PreToolUse hook: guards policy/template files
+│   └── verify.sh                         — document integrity checks (run via make verify)
 └── .claude/
-    ├── settings.json                      — registers the PreToolUse hook (team-wide)
+    ├── settings.json                      — registers all PreToolUse hooks (team-wide)
+    ├── agents/
+    │   ├── verifier.md                    — subagent: runs make verify, reports only
+    │   ├── researcher.md                  — subagent: explores codebase/web, read-only
+    │   └── simplifier.md                 — subagent: reviews artifacts, proposes cuts
     └── skills/
         ├── create-intent/
         │   ├── SKILL.md                   — /create-intent skill
@@ -268,7 +275,7 @@ If the current branch is `main`, the command is blocked with a message naming th
 
 **Check 2 — Enforce branch naming convention**
 
-If the branch name does not match `^(intent|spec|plan)/[a-z0-9][a-z0-9-]*$`, the command is blocked. This ensures every commit is traceable to a stage and a named artifact — not to an arbitrary branch like `feature/something` or `fix`.
+If the branch name does not match `^(intent|spec|plan|policy|template)/[a-z0-9][a-z0-9-]*$`, the command is blocked. This ensures every commit is traceable to a stage and a named artifact — not to an arbitrary branch like `feature/something` or `fix`.
 
 **Check 3 — Commit subject line length (soft gate)**
 
@@ -282,6 +289,18 @@ If the command is `git commit -m "..."` and the first line of the message exceed
 | `2` | Block — the hook's stderr output is shown to Claude as an error message |
 
 Any non-git Bash command (e.g. `ls`, `python3`, `npm install`) passes check 1 immediately and exits 0. The hook adds no overhead to unrelated commands.
+
+### Branch naming
+
+All branches follow a stage-prefixed naming convention. The hook enforces this on every `git add`, `git commit`, and `git push`.
+
+| Branch prefix | When to use |
+|---|---|
+| `intent/<kebab-name>` | Adding or revising a Stage 1 intent document |
+| `spec/<kebab-name>` | Adding or revising a Stage 2 spec document |
+| `plan/<kebab-name>` | Adding or revising a Stage 3 plan document |
+| `policy/<kebab-name>` | Modifying any file in `.claude/skills/policies/` |
+| `template/<kebab-name>` | Modifying any SKILL.md, `*-template.md`, or `scripts/verify.sh` |
 
 ### Governance
 
@@ -299,6 +318,160 @@ This hook fires on `Bash` tool calls. It does not fire when a shell command rewr
 |---|---|
 | `scripts/check-git-branch.sh` | The hook script — branch and commit message checks |
 | `.claude/settings.json` | Registers the `PreToolUse` hook on the `Bash` tool |
+
+---
+
+## Module 5: Parallel Sessions and Subagents
+
+**Status: complete**
+
+A single Claude Code session is fast — but one engineer can run several sessions in parallel, each in its own Git worktree, each focused on a different part of the work. Within a session, subagents handle repeated jobs: verifying outputs, researching the codebase, reviewing drafts for complexity. This keeps the main session focused on implementation rather than context-switching.
+
+### Parallel worktrees
+
+Each worktree is a full checkout of the repository on its own branch. Claude Code can be opened in each directory independently, and the sessions do not share context. The engineer orchestrates across sessions: "session A is building phase 1, session B is researching the API, session C verified the last commit."
+
+Use `git worktree add` to create a parallel checkout:
+
+```
+git worktree add ../playbook-session-b plan/my-feature-session-b
+```
+
+The `.claude/agents/` subagent definitions and `.claude/settings.json` hooks apply in every worktree — the same guardrails everywhere.
+
+### Subagent definitions
+
+Subagents are defined as Markdown files in `.claude/agents/` with YAML frontmatter. The format:
+
+```markdown
+---
+name: <agent-name>
+description: >
+  When to invoke this agent and what it does. This text is read by the main
+  session to decide whether to delegate to this agent.
+tools:
+  - Bash
+  - Read
+  - ...
+---
+
+# <agent-name>
+
+Body: rules and output format for the agent.
+```
+
+The `tools:` list is structural enforcement. An agent without `Write` in its list cannot modify files, regardless of what it is asked to do. This is different from an instruction ("don't write files") — the tool is simply unavailable.
+
+### The three subagents
+
+| Subagent | Tools | Purpose |
+|---|---|---|
+| `verifier` | Bash | Runs `make verify`, reports output verbatim. Does not fix anything. |
+| `researcher` | Bash (read-only), Glob, Grep, Read, WebSearch | Explores codebase and web. Never creates or modifies files. |
+| `simplifier` | Bash (read-only), Glob, Grep, Read | Reviews completed artifacts and proposes targeted cuts. Never applies changes. |
+
+### Why tool constraints matter
+
+An instruction to an agent is advisory — the agent can reason past it. A missing tool is structural — the action is unavailable. When the researcher has no `Write` or `Edit` tool, it cannot accidentally modify a file even if the main session gives confused instructions. When the verifier has only `Bash`, it cannot create files or open pull requests.
+
+### Invocation examples
+
+```
+# Check if the implementation is complete before opening a PR
+"Run the verifier before I report done."
+
+# Understand what already exists before writing new code
+"Use the researcher to summarize what the existing hook scripts do."
+
+# Review a draft for over-engineering
+"Run the simplifier on spec/my-feature.md."
+```
+
+### Reference files
+
+| File | Purpose |
+|---|---|
+| `.claude/agents/verifier.md` | Subagent definition — runs make verify |
+| `.claude/agents/researcher.md` | Subagent definition — read-only codebase/web exploration |
+| `.claude/agents/simplifier.md` | Subagent definition — reviews artifacts, proposes cuts |
+
+---
+
+## Module 6: Give Claude a Feedback Loop
+
+**Status: complete**
+
+The first five modules established the advisory layer (CLAUDE.md, skills), the deterministic layer (hooks), and the parallel layer (subagents). Module 6 closes the loop: Claude runs a verification pass before reporting a task complete, and a second hook protects the files that make the whole system work.
+
+### The verify command
+
+```
+make verify
+```
+
+This runs `scripts/verify.sh`, which performs four checks:
+
+| Check | What it verifies |
+|---|---|
+| 1 — spec/intent pairing | Every file in `spec/` has a matching file in `intent/` |
+| 2 — plan/spec pairing | Every file in `plan/` has a matching file in `spec/` |
+| 3 — agent frontmatter | Every `.claude/agents/*.md` has `name:` and `description:` |
+| 4 — CLAUDE.md line count | `CLAUDE.md` is under 250 lines |
+
+Exit 0 means all checks passed. Exit 1 means one or more failed — the output names exactly which checks failed.
+
+### The feedback loop cycle
+
+```
+task assigned
+    ↓
+implement
+    ↓
+make verify
+    ↓
+  FAIL? → fix → make verify (repeat)
+    ↓
+  PASS → report done / open PR
+```
+
+Claude runs `make verify` as the last step before reporting a task complete. The verifier subagent can also run it in a fresh context — useful when the main session has accumulated context that might bias its assessment.
+
+### Protecting the guardrails
+
+A hook only works if its script cannot be weakened by the same agents that the hook governs. The `protect-templates.sh` hook closes this gap.
+
+It fires as a `PreToolUse` hook on both the `Edit` and `Write` tools. Before any edit or file write, it checks whether the target path is protected:
+
+| Protected path | Why |
+|---|---|
+| `.claude/skills/policies/` | Policy constraints — weakening them weakens every future spec |
+| `.claude/skills/*/SKILL.md` | Skill definitions — a modified skill silently changes workflow |
+| `.claude/skills/*-template.md` | Templates — a modified template silently changes every future artifact |
+| `scripts/verify.sh` | The verify script itself — a weakened script gives false green |
+
+If the path is protected and the current branch does not start with `policy/` or `template/`, the tool call is blocked.
+
+### Branch prefix → what it allows
+
+| Branch prefix | What it permits |
+|---|---|
+| `policy/<name>` | Modifying files in `.claude/skills/policies/` |
+| `template/<name>` | Modifying SKILL.md files, `*-template.md` files, `scripts/verify.sh` |
+
+Changes to these files go through a named branch and a pull request — giving the team visibility into what is changing and why, the same as any other code change.
+
+### Why this matters for parallel sessions
+
+When multiple Claude Code sessions run in parallel worktrees, one session cannot silently weaken a gate that another session depends on. If session A is building a new integration and session B is verifying it, session B runs `make verify` knowing the script has not been tampered with. The hook enforces this structurally — no session on a `plan/` branch can edit `scripts/verify.sh`.
+
+### Reference files
+
+| File | Purpose |
+|---|---|
+| `scripts/verify.sh` | The four integrity checks |
+| `scripts/protect-templates.sh` | PreToolUse hook for Edit and Write tools |
+| `Makefile` | Exposes `make verify` as the single entry point |
+| `.claude/settings.json` | Registers all three PreToolUse hooks |
 
 ---
 

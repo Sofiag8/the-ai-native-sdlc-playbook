@@ -3,7 +3,7 @@
 #
 # Blocks git add, git commit, and git push when:
 #   1. The current branch is main
-#   2. The branch name does not follow intent/|spec/|plan/ convention
+#   2. The branch name does not follow intent/|spec/|plan/|policy/|template/ convention
 #   3. (git commit only) The -m subject line exceeds 72 characters
 #
 # Exit 0 = allow  |  Exit 2 = block (message shown to Claude)
@@ -36,15 +36,18 @@ if [[ "$BRANCH" == "main" ]]; then
   echo "  git checkout -b intent/<kebab-name>" >&2
   echo "  git checkout -b spec/<kebab-name>" >&2
   echo "  git checkout -b plan/<kebab-name>" >&2
+  echo "  git checkout -b policy/<kebab-name>" >&2
+  echo "  git checkout -b template/<kebab-name>" >&2
   exit 2
 fi
 
 # --- Check 2: enforce branch naming convention ---
-if [[ ! "$BRANCH" =~ ^(intent|spec|plan)/[a-z0-9][a-z0-9-]*$ ]]; then
+if [[ ! "$BRANCH" =~ ^(intent|spec|plan|policy|template)/[a-z0-9][a-z0-9-]*$ ]]; then
   echo "Hook blocked: branch '$BRANCH' does not follow the naming convention." >&2
   echo "" >&2
   echo "Rename your branch to match one of:" >&2
   echo "  intent/<kebab-name>  |  spec/<kebab-name>  |  plan/<kebab-name>" >&2
+  echo "  policy/<kebab-name>  |  template/<kebab-name>" >&2
   exit 2
 fi
 
