@@ -16,7 +16,10 @@ the-ai-native-sdlc-playbook/
 ├── intent/                                — Stage 1: generated intent documents live here
 ├── spec/                                  — Stage 2: generated spec documents live here
 ├── plan/                                  — Stage 3: generated plan documents live here
+├── scripts/
+│   └── check-git-branch.sh               — PreToolUse hook: enforces branch conventions
 └── .claude/
+    ├── settings.json                      — registers the PreToolUse hook (team-wide)
     └── skills/
         ├── create-intent/
         │   ├── SKILL.md                   — /create-intent skill
@@ -179,6 +182,29 @@ An engineer or technical lead invokes `/create-plan` with the spec file path. Th
 ```
 
 Set `source-of-truth:` in the plan.md metadata to `repo`, `jira:<ticket-id>`, or `github-issue:<number>` to record which system is authoritative for this plan. Default is `repo`.
+
+---
+
+## Module 4: Hooks as Build-Time Guardrails
+
+Skills and CLAUDE.md rules are advisory — Claude can reason past them. Hooks are deterministic: they fire on every matching tool call and block the action before it runs.
+
+### The hook
+
+`scripts/check-git-branch.sh` is registered as a `PreToolUse` hook on the `Bash` tool in `.claude/settings.json`. It fires before every Bash call.
+
+**What it blocks (exit 2 — blocked, message shown to Claude):**
+1. `git add`, `git commit`, or `git push` while on branch `main`
+2. Those same commands while on a branch that does not match `^(intent|spec|plan)/[a-z0-9][a-z0-9-]*$`
+3. `git commit -m "..."` where the subject line exceeds 72 characters
+
+**What it allows (exit 0):**
+- Any Bash command that is not `git add`, `git commit`, or `git push`
+- Those git commands on a correctly named branch with an acceptable commit message
+
+### Registration
+
+`.claude/settings.json` is committed to the repository. Every team member who opens a Claude Code session in this repo gets the same hook behavior. Personal overrides go in `.claude/settings.local.json` (gitignored).
 
 ---
 
