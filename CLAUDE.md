@@ -13,12 +13,20 @@ This repository is a neutral, anonymized template demonstrating the AI-native so
 ```
 the-ai-native-sdlc-playbook/
 ├── CLAUDE.md                              — this file
-├── intent/                                — Module 1: generated intent documents live here
+├── intent/                                — Stage 1: generated intent documents live here
+├── spec/                                  — Stage 2: generated spec documents live here
 └── .claude/
     └── skills/
-        └── create-intent/
-            ├── SKILL.md                   — /create-intent skill
-            └── intent-template.md         — template the skill reads at runtime
+        ├── create-intent/
+        │   ├── SKILL.md                   — /create-intent skill
+        │   └── intent-template.md         — template the skill reads at runtime
+        ├── create-spec/
+        │   ├── SKILL.md                   — /create-spec skill
+        │   └── spec-template.md           — IRD-shaped template the skill reads at runtime
+        └── policies/
+            ├── integration-security.md    — auth, PII, encryption constraints
+            ├── integration-standards.md   — error categories, retry, idempotency
+            └── infrastructure-ownership.md — ownership model, costs, warranty
 ```
 
 ---
@@ -82,6 +90,58 @@ The blank template lives at `.claude/skills/create-intent/intent-template.md`. I
 
 ---
 
+---
+
+## Module 2: Requirements and Design
+
+The second stage takes an approved `intent.md` and produces a full Integration Requirements Document (spec.md) that engineering can plan against.
+
+### What a spec document is
+
+A spec captures:
+- Overview and definitions
+- Scope boundary (confirmed and extended from intent)
+- Infrastructure ownership and cloud components
+- Proposed data flow (step-by-step, per direction)
+- Field mapping and data transformation
+- Error handling and exception playbook (Categories A, B, C)
+- Responsibilities (vendor vs. client)
+- Assumptions, definition of done, costs
+- Open items (carried from intent, plus spec-surfaced gaps)
+- Areas of Concern (policy violations or design risks flagged for product owner review)
+
+Spec documents live in the `spec/` folder with the same kebab-case name as the source intent.
+
+### Lifecycle states
+
+| Status | Meaning |
+|--------|---------|
+| `draft` | Generated; not yet reviewed by product owner |
+| `under-review` | Product owner reviewing Areas of Concern with policy owners |
+| `approved` | All concerns resolved; ready to advance to Stage 3 (Build) |
+
+### Creating a spec document
+
+A product owner or technical lead invokes `/create-spec` with the intent file path. The skill reads the intent, applies the three policy skills, and generates the spec in one pass.
+
+```
+/create-spec intent/crm-to-practice-management-sync.md
+```
+
+The skill also creates a Google Doc version for stakeholder sharing (requires Google Workspace connection).
+
+### Policy skills
+
+The spec is constrained by three policy files in `.claude/skills/policies/`. These are read automatically by `/create-spec` — they do not need to be invoked separately.
+
+| Policy file | Enforces |
+|-------------|---------|
+| `integration-security.md` | Auth methods, PII handling, encryption, secrets management |
+| `integration-standards.md` | Error categories (A/B/C), retry, idempotency, deduplication, logging |
+| `infrastructure-ownership.md` | Client owns infrastructure, vendor owns code, warranty terms, cost estimation |
+
+---
+
 ## Git and GitHub workflow
 
 Branch naming follows the stage of the artifact being created or revised:
@@ -89,7 +149,7 @@ Branch naming follows the stage of the artifact being created or revised:
 | Branch pattern | When to use |
 |----------------|-------------|
 | `intent/<kebab-name>` | Adding or revising a Stage 1 intent document |
-| `spec/<kebab-name>` | Stage 2 specification _(future)_ |
+| `spec/<kebab-name>` | Adding or revising a Stage 2 spec document |
 
 **To add a new intent document:**
 1. Create a branch: `git checkout -b intent/<kebab-name>`
@@ -97,5 +157,12 @@ Branch naming follows the stage of the artifact being created or revised:
 3. Commit the file and push the branch
 4. Open a PR — the PR merge is the recorded approval event for this artifact
 5. Once all open questions are resolved and the PR checklist passes, merge to main
+
+**To add a new spec document:**
+1. Create a branch: `git checkout -b spec/<kebab-name>`
+2. Run `/create-spec intent/<kebab-name>.md` and let the skill generate the file
+3. Commit both the spec and any Google Doc URL update, then push the branch
+4. Open a PR — resolve Areas of Concern before merging
+5. Merge when status is `approved`
 
 The `main` branch is protected — no direct pushes. All changes go through a PR.

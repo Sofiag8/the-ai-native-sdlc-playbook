@@ -24,11 +24,20 @@ the-ai-native-sdlc-playbook/
 ├── CLAUDE.md                              — guidance for Claude Code sessions
 ├── intent/                                — Stage 1: generated intent documents live here
 │   └── crm-to-practice-management-sync.md — example (filled in)
+├── spec/                                  — Stage 2: generated spec documents live here
+│   └── crm-to-practice-management-sync.md — example (filled in)
 └── .claude/
     └── skills/
-        └── create-intent/
-            ├── SKILL.md                   — /create-intent skill
-            └── intent-template.md         — template the skill reads at runtime
+        ├── create-intent/
+        │   ├── SKILL.md                   — /create-intent skill
+        │   └── intent-template.md         — template the skill reads at runtime
+        ├── create-spec/
+        │   ├── SKILL.md                   — /create-spec skill
+        │   └── spec-template.md           — IRD-shaped template the skill reads at runtime
+        └── policies/
+            ├── integration-security.md    — auth, PII, encryption constraints
+            ├── integration-standards.md   — error categories, retry, idempotency
+            └── infrastructure-ownership.md — ownership model, costs, warranty
 ```
 
 ---
@@ -89,6 +98,80 @@ The skill guides the originator through eight conversational phases — one ques
 | `.claude/skills/create-intent/intent-template.md` | Blank template — all sections with inline guidance |
 | `intent/crm-to-practice-management-sync.md` | Filled example — a professional services firm automating new engagement onboarding |
 | `.claude/skills/create-intent/SKILL.md` | The `/create-intent` skill source |
+
+---
+
+## Stage 2: Requirements and Design
+
+**Status: complete**
+
+The second stage takes an approved `intent.md` and produces a full Integration Requirements Document — what this repo calls `spec.md`. This is the document engineering plans against. It is richer and more technical than the intent, grounded in the organization's policies, and contains flagged concerns the product owner must resolve before build begins.
+
+In a traditional workflow, this document is drafted manually: a technical lead hunts through Slack threads, prior documents, and project memory to assemble it. The AI-native version produces the same artifact in one prompted session.
+
+### The artifact
+
+A spec document captures:
+- Overview and important definitions
+- Scope boundary (confirmed and technically extended from intent)
+- Infrastructure ownership and cloud components
+- Proposed data flow — step-by-step, per direction
+- Source system integration points (auth, rate limits, trigger mechanism)
+- Volume estimates
+- Full field mapping / data transformation table
+- Source of truth rules (which system wins on conflict)
+- Error handling and exception playbook (Categories A, B, C)
+- Responsibilities table (vendor vs. client — every task assigned)
+- Assumptions and limitations
+- Definition of done
+- Costs and ownership (monthly cloud estimate + warranty scope)
+- Omissions (explicitly not in scope)
+- Open items (carried from intent, plus spec-surfaced gaps)
+- Decision record
+- Areas of Concern (policy violations or design risks for product owner review)
+
+Files live in `spec/` with the same kebab-case name as the source intent. The spec and intent are always committed together — the file pair records what was asked for and what was designed.
+
+**Lifecycle states:**
+
+| Status | Meaning |
+|--------|---------|
+| `draft` | Generated; not yet reviewed |
+| `under-review` | Product owner reviewing Areas of Concern with policy owners |
+| `approved` | All concerns resolved; ready to advance to Stage 3 (Build) |
+
+### How to create a spec document
+
+Run the `/create-spec` skill with the path to the approved intent file. This is a single-pass skill — it generates the full spec in one turn without asking questions.
+
+```
+/create-spec intent/crm-to-practice-management-sync.md
+```
+
+The skill reads the intent, applies the three policy skills as constraints, generates the spec, flags concerns, saves `spec/<name>.md`, and creates a Google Doc for stakeholder sharing (requires Google Workspace connection).
+
+### Policy skills
+
+The spec is automatically constrained by three policy files. These are read by `/create-spec` — they do not need to be invoked separately. Organizations adapt these to their own standards.
+
+| File | Enforces |
+|------|---------|
+| `.claude/skills/policies/integration-security.md` | Authentication methods, PII field handling, encryption, secrets management |
+| `.claude/skills/policies/integration-standards.md` | Error categories (A/B/C), retry policy, idempotency, deduplication, logging |
+| `.claude/skills/policies/infrastructure-ownership.md` | Client owns infrastructure, vendor owns code, 10-day warranty, cost estimation |
+
+### The Google Doc
+
+After saving the `.md` file, `/create-spec` creates a Google Doc with the same content. The `.md` file is the version-controlled artifact (tracked in Git, diff-able, chained to the next stage). The Google Doc is the stakeholder-facing copy — the format teams already use to share with clients, partners, and internal reviewers.
+
+### Reference files
+
+| File | Purpose |
+|------|---------|
+| `.claude/skills/create-spec/spec-template.md` | Blank template — all 19 sections with inline guidance |
+| `spec/crm-to-practice-management-sync.md` | Filled example — the same professional services scenario as the intent example, taken through to full spec |
+| `.claude/skills/create-spec/SKILL.md` | The `/create-spec` skill source |
+| `.claude/skills/policies/` | The three policy constraint files |
 
 ---
 
