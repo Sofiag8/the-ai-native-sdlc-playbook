@@ -1,0 +1,13 @@
+# macOS
+.DS_Store
+
+# Claude Code — local/personal files (not shared)
+.claude/settings.local.json
+.claude/projects/
+CLAUDE.local.md
+
+# Common IDE
+.idea/
+.vscode/
+*.swp
+*.swo
